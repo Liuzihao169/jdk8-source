@@ -280,44 +280,85 @@ public class LinkedHashMap<K,V>
         return t;
     }
 
+    /**
+     * 删除当前节点
+     * @param e
+     */
     void afterNodeRemoval(Node<K,V> e) { // unlink
         LinkedHashMap.Entry<K,V> p =
             (LinkedHashMap.Entry<K,V>)e, b = p.before, a = p.after;
+        // b - > p -> a
         p.before = p.after = null;
+        // p 是头节点 那么 p.next 变为头节点
         if (b == null)
             head = a;
         else
             b.after = a;
+        // p是不是尾节点 如果是那么尾 节点为b
         if (a == null)
             tail = b;
+        // 连接前节点
         else
             a.before = b;
     }
 
+    /**
+     * 在插入之后的 回调方法，可以根据策略维护 双链表
+     * 因为removeEldestEntry 方法在 LinkedHashMap 当中一直是返回 false 所以这个方法不会被调用
+     * 备注：我们可以利用这个回调来维护 LRU
+     * @param evict
+     */
     void afterNodeInsertion(boolean evict) { // possibly remove eldest
         LinkedHashMap.Entry<K,V> first;
         if (evict && (first = head) != null && removeEldestEntry(first)) {
             K key = first.key;
+            // 删除队头 最久没有被访问的数据
             removeNode(hash(key), key, null, false, true);
         }
     }
 
+
+    /**
+     * 1. 使用 get 方法会访问到节点, 从而触发调用这个方法
+     * 2. 使用 put 方法插入节点, 如果 key 存在, 也算要访问节点, 从而触发该方法
+     * 3. 只有 accessOrder 是 true 才会调用该方法
+     * 4. 这个方法会把访问到的最后节点重新插入到双向链表结尾
+     */
     void afterNodeAccess(Node<K,V> e) { // move node to last
+        // 用 last 表示插入 e 前的尾节点
+        // 插入 e 后 e 是尾节点, 所以也是表示 e 的前一个节点
         LinkedHashMap.Entry<K,V> last;
+        //如果是访问序，且当前节点并不是尾节点
+        //将该节点置为双向链表的尾部
         if (accessOrder && (last = tail) != e) {
+            // p: 当前节点
+            // b: 前一个节点
+            // a: 后一个节点
+            // 结构为: b <=> p <=> a
             LinkedHashMap.Entry<K,V> p =
-                (LinkedHashMap.Entry<K,V>)e, b = p.before, a = p.after;
+                    (LinkedHashMap.Entry<K,V>)e, b = p.before, a = p.after;
+            // 结构变成: b <=> p <- a
             p.after = null;
+
+            // 如果当前节点 p 本身是头节点, 那么头结点要改成 a
             if (b == null)
                 head = a;
+                // 如果 p 不是头尾节点, 把前后节点连接, 变成: b -> a
             else
                 b.after = a;
+
+            // a 非空, 和 b 连接, 变成: b <- a
             if (a != null)
                 a.before = b;
+                // 如果 a 为空, 说明 p 是尾节点, b 就是它的前一个节点, 符合 last 的定义
+                // 这个 else 没有意义，因为最开头if已经确保了p不是尾结点了，自然after不会是null
             else
                 last = b;
+
+            // 如果这是空链表, p 改成头结点
             if (last == null)
                 head = p;
+                // 否则把 p 插入到链表尾部
             else {
                 p.before = last;
                 last.after = p;
@@ -326,6 +367,8 @@ public class LinkedHashMap<K,V>
             ++modCount;
         }
     }
+
+
 
     void internalWriteEntries(java.io.ObjectOutputStream s) throws IOException {
         for (LinkedHashMap.Entry<K,V> e = head; e != null; e = e.after) {
@@ -342,6 +385,7 @@ public class LinkedHashMap<K,V>
      * @param  loadFactor      the load factor
      * @throws IllegalArgumentException if the initial capacity is negative
      *         or the load factor is nonpositive
+     *         调用HashMap的方法进行初始化
      */
     public LinkedHashMap(int initialCapacity, float loadFactor) {
         super(initialCapacity, loadFactor);
@@ -354,6 +398,9 @@ public class LinkedHashMap<K,V>
      *
      * @param  initialCapacity the initial capacity
      * @throws IllegalArgumentException if the initial capacity is negative
+     *
+     *
+     * 调用HashMap的方法进行初始化
      */
     public LinkedHashMap(int initialCapacity) {
         super(initialCapacity);
@@ -394,6 +441,9 @@ public class LinkedHashMap<K,V>
      *         access-order, <tt>false</tt> for insertion-order
      * @throws IllegalArgumentException if the initial capacity is negative
      *         or the load factor is nonpositive
+     *
+     *       accessOrder 能够访问顺序
+     *
      */
     public LinkedHashMap(int initialCapacity,
                          float loadFactor,

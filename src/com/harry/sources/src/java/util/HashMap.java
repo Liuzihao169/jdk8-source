@@ -606,7 +606,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      *         <tt>null</tt> if there was no mapping for <tt>key</tt>.
      *         (A <tt>null</tt> return can also indicate that the map
      *         previously associated <tt>null</tt> with <tt>key</tt>.)
+     *
+     *
+     *
+     *  hash(key) 方法在jdk1.8中进行是 高位异或 目的就是为了增加散列程度
+     *
      */
+
     public V put(K key, V value) {
         return putVal(hash(key), key, value, false, true);
     }
@@ -620,46 +626,80 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * @param onlyIfAbsent if true, don't change existing value
      * @param evict if false, the table is in creation mode.
      * @return previous value, or null if none
+     *
+     *
+     * jdk 1.8 hashmap的 底层数据结构 是 数组 + 单链表 + 红黑数
+     *
+     *
      */
     final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                    boolean evict) {
         Node<K,V>[] tab; Node<K,V> p; int n, i;
+        // 数组为空 那么初始化
         if ((tab = table) == null || (n = tab.length) == 0)
             n = (tab = resize()).length;
+        /**
+         * 获取当前key 的在数组中的位置
+         * 巧妙之处 ： 利用 n-1 & hash 替代 hash % n  求摩
+         */
+        // 不存在
         if ((p = tab[i = (n - 1) & hash]) == null)
             tab[i] = newNode(hash, key, value, null);
         else {
+            // 存在
             Node<K,V> e; K k;
             if (p.hash == hash &&
                 ((k = p.key) == key || (key != null && key.equals(k))))
                 e = p;
+
+            // 已转换为红黑树，进行红黑数的插入方法
             else if (p instanceof TreeNode)
                 e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
             else {
+
                 for (int binCount = 0; ; ++binCount) {
+                    //尾插入法 插入到最后一个元素的后面
                     if ((e = p.next) == null) {
                         p.next = newNode(hash, key, value, null);
+                        //链表长度大于8 也就是存储链表的第9个元素之后
                         if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+
+                            // 红黑数转换
                             treeifyBin(tab, hash);
                         break;
                     }
+                    //遍历过程判断是否存在相同的key
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
                         break;
                     p = e;
                 }
             }
+            //如果有存在key 与put进入的key相同
+            //进行元素覆盖  相同的key的 覆盖
             if (e != null) { // existing mapping for key
                 V oldValue = e.value;
                 if (!onlyIfAbsent || oldValue == null)
                     e.value = value;
+
+                //**** 重要 *****//
+                // 方法回调： key被访问后
                 afterNodeAccess(e);
+
                 return oldValue;
             }
         }
+
+
+        /**
+         * size > 容量 * 负载因子
+         */
         ++modCount;
         if (++size > threshold)
             resize();
+
+        //**** 重要 *****//
+        // 方法回调：key被插入后
         afterNodeInsertion(evict);
         return null;
     }
