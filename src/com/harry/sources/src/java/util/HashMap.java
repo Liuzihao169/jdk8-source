@@ -757,6 +757,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                         Node<K,V> next;
                         do {
                             next = e.next;
+                            // 如果是0 那么在原位置
+                            // 否则 newCup[j + oldCup]
                             if ((e.hash & oldCap) == 0) {
                                 if (loTail == null)
                                     loHead = e;

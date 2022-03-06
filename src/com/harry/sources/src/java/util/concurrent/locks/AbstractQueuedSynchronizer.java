@@ -384,16 +384,26 @@ public abstract class AbstractQueuedSynchronizer
         static final Node EXCLUSIVE = null;
 
         /** waitStatus value to indicate thread has cancelled */
+        // 表示当前结点已取消调度。当timeout或被中断（响应中断的情况下），会触发变更为此状态，进入该状态后的结点将不会再变化。
         static final int CANCELLED =  1;
+
+
         /** waitStatus value to indicate successor's thread needs unparking */
+        // 表示后继结点在等待当前结点唤醒。后继结点入队时，会将前继结点的状态更新为SIGNAL。
         static final int SIGNAL    = -1;
+
+
         /** waitStatus value to indicate thread is waiting on condition */
+        // 表示结点等待在Condition上，当其他线程调用了Condition的signal()方法后，CONDITION状态的结点将从等待队列转移到同步队列中，等待获取同步锁。
         static final int CONDITION = -2;
         /**
          * waitStatus value to indicate the next acquireShared should
          * unconditionally propagate
          */
+        // 共享模式下，前继结点不仅会唤醒其后继结点，同时也可能会唤醒后继的后继结点。
         static final int PROPAGATE = -3;
+
+        // 0 就是新节点
 
         /**
          * Status field, taking on only the values:
@@ -602,18 +612,25 @@ public abstract class AbstractQueuedSynchronizer
      * @param mode Node.EXCLUSIVE for exclusive, Node.SHARED for shared
      * @return the new node
      */
+    // 构建等待节点
     private Node addWaiter(Node mode) {
         Node node = new Node(Thread.currentThread(), mode);
         // Try the fast path of enq; backup to full enq on failure
+
+        // 尝试快速添加尾节点 第一个
         Node pred = tail;
         if (pred != null) {
             node.prev = pred;
+            // CAS方式设置尾节点
             if (compareAndSetTail(pred, node)) {
                 pred.next = node;
                 return node;
             }
         }
+
+        // 以死循环的方式进行CAS设置尾节点
         enq(node);
+
         return node;
     }
 
@@ -628,38 +645,6 @@ public abstract class AbstractQueuedSynchronizer
         head = node;
         node.thread = null;
         node.prev = null;
-    }
-
-    /**
-     * Wakes up node's successor, if one exists.
-     *
-     * @param node the node
-     */
-    private void unparkSuccessor(Node node) {
-        /*
-         * If status is negative (i.e., possibly needing signal) try
-         * to clear in anticipation of signalling.  It is OK if this
-         * fails or if status is changed by waiting thread.
-         */
-        int ws = node.waitStatus;
-        if (ws < 0)
-            compareAndSetWaitStatus(node, ws, 0);
-
-        /*
-         * Thread to unpark is held in successor, which is normally
-         * just the next node.  But if cancelled or apparently null,
-         * traverse backwards from tail to find the actual
-         * non-cancelled successor.
-         */
-        Node s = node.next;
-        if (s == null || s.waitStatus > 0) {
-            s = null;
-            for (Node t = tail; t != null && t != node; t = t.prev)
-                if (t.waitStatus <= 0)
-                    s = t;
-        }
-        if (s != null)
-            LockSupport.unpark(s.thread);
     }
 
     /**
@@ -695,6 +680,38 @@ public abstract class AbstractQueuedSynchronizer
             if (h == head)                   // loop if head changed
                 break;
         }
+    }
+
+    /**
+     * Wakes up node's successor, if one exists.
+     *
+     * @param node the node
+     */
+    private void unparkSuccessor(Node node) {
+        /*
+         * If status is negative (i.e., possibly needing signal) try
+         * to clear in anticipation of signalling.  It is OK if this
+         * fails or if status is changed by waiting thread.
+         */
+        int ws = node.waitStatus;
+        if (ws < 0)
+            compareAndSetWaitStatus(node, ws, 0);
+
+        /*
+         * Thread to unpark is held in successor, which is normally
+         * just the next node.  But if cancelled or apparently null,
+         * traverse backwards from tail to find the actual
+         * non-cancelled successor.
+         */
+        Node s = node.next;
+        if (s == null || s.waitStatus > 0) {
+            s = null;
+            for (Node t = tail; t != null && t != node; t = t.prev)
+                if (t.waitStatus <= 0)
+                    s = t;
+        }
+        if (s != null)
+            LockSupport.unpark(s.thread);
     }
 
     /**
@@ -854,14 +871,19 @@ public abstract class AbstractQueuedSynchronizer
      * @param arg the acquire argument
      * @return {@code true} if interrupted while waiting
      */
+    // 自旋的方式，都在等待，满足当前节点的前一个节点 = head时开始尝试获取同步状态
     final boolean acquireQueued(final Node node, int arg) {
         boolean failed = true;
         try {
             boolean interrupted = false;
             for (;;) {
                 final Node p = node.predecessor();
+                // 如果前一个节点为头节点
                 if (p == head && tryAcquire(arg)) {
+                    // 释放上一个节点
+                    // 把当前节点设置为头节点
                     setHead(node);
+
                     p.next = null; // help GC
                     failed = false;
                     return interrupted;
@@ -888,6 +910,7 @@ public abstract class AbstractQueuedSynchronizer
             for (;;) {
                 final Node p = node.predecessor();
                 if (p == head && tryAcquire(arg)) {
+                    // 设置当前节点为头节点
                     setHead(node);
                     p.next = null; // help GC
                     failed = false;
@@ -1194,6 +1217,13 @@ public abstract class AbstractQueuedSynchronizer
      *        {@link #tryAcquire} but is otherwise uninterpreted and
      *        can represent anything you like.
      */
+
+    /**
+     * 核心逻辑：
+     * a.同步状态获取
+     * b.节点构造
+     * c.加入同步队列，自旋
+     */
     public final void acquire(int arg) {
         if (!tryAcquire(arg) &&
             acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
@@ -1223,6 +1253,26 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
+     * Releases in exclusive mode.  Implemented by unblocking one or
+     * more threads if {@link #tryRelease} returns true.
+     * This method can be used to implement method {@link Lock#unlock}.
+     *
+     * @param arg the release argument.  This value is conveyed to
+     *        {@link #tryRelease} but is otherwise uninterpreted and
+     *        can represent anything you like.
+     * @return the value returned from {@link #tryRelease}
+     */
+    public final boolean release(int arg) {
+        if (tryRelease(arg)) {
+            Node h = head;
+            if (h != null && h.waitStatus != 0)
+                unparkSuccessor(h);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Attempts to acquire in exclusive mode, aborting if interrupted,
      * and failing if the given timeout elapses.  Implemented by first
      * checking interrupt status, then invoking at least once {@link
@@ -1244,27 +1294,7 @@ public abstract class AbstractQueuedSynchronizer
         if (Thread.interrupted())
             throw new InterruptedException();
         return tryAcquire(arg) ||
-            doAcquireNanos(arg, nanosTimeout);
-    }
-
-    /**
-     * Releases in exclusive mode.  Implemented by unblocking one or
-     * more threads if {@link #tryRelease} returns true.
-     * This method can be used to implement method {@link Lock#unlock}.
-     *
-     * @param arg the release argument.  This value is conveyed to
-     *        {@link #tryRelease} but is otherwise uninterpreted and
-     *        can represent anything you like.
-     * @return the value returned from {@link #tryRelease}
-     */
-    public final boolean release(int arg) {
-        if (tryRelease(arg)) {
-            Node h = head;
-            if (h != null && h.waitStatus != 0)
-                unparkSuccessor(h);
-            return true;
-        }
-        return false;
+                doAcquireNanos(arg, nanosTimeout);
     }
 
     /**
