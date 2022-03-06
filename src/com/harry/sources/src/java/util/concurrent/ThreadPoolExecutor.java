@@ -1352,19 +1352,33 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * thread.  If it fails, we know we are shut down or saturated
          * and so reject the task.
          */
+
+        // 存放线程池的运⾏状态 (runState) 和线程池内有效线程的数量 (workerCount)
         int c = ctl.get();
+        // 小于核心线程数 添加核心线程
         if (workerCountOf(c) < corePoolSize) {
             if (addWorker(command, true))
                 return;
             c = ctl.get();
         }
+        // 通过 isRunning ⽅法判断线程池状态，线程池处于
+        // RUNNING 状态才会被并且队列可以 加⼊任务，该任务才会被加⼊进去
         if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
+
+            // 再次获取线程池状态，如果线程池状态不是 RUNNING 状态就需要从任务队列中移除 任务，
+            // 并尝试判断线程是否全部执⾏完毕。同时执⾏拒绝策略。
+
             if (! isRunning(recheck) && remove(command))
                 reject(command);
+
+            // 如果当前线程池为空就新创建⼀个线程并执⾏。
             else if (workerCountOf(recheck) == 0)
                 addWorker(null, false);
         }
+
+        //3. 通过addWorker(command, false)新建⼀个线程，并将任务(command)添加到该线程中；然后，启动该线程从⽽执⾏任务。
+        // 如果addWorker(command, false)执⾏失败，则通过reject()执⾏相应的拒绝策略的内容。
         else if (!addWorker(command, false))
             reject(command);
     }
