@@ -238,6 +238,8 @@ public class ReentrantReadWriteLock
      */
     public ReentrantReadWriteLock(boolean fair) {
         sync = fair ? new FairSync() : new NonfairSync();
+        // 读写
+
         readerLock = new ReadLock(this);
         writerLock = new WriteLock(this);
     }
