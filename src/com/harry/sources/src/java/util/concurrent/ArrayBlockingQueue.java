@@ -107,13 +107,13 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      * found in any textbook.
      */
 
-    /** Main lock guarding all access */
+    // 所有操作的全局锁
     final ReentrantLock lock;
 
-    /** Condition for waiting takes */
+    // 等待队列 takes
     private final Condition notEmpty;
 
-    /** Condition for waiting puts */
+    // 等待队列 for puts
     private final Condition notFull;
 
     /**

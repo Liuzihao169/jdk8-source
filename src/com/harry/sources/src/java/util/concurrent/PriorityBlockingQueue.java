@@ -292,6 +292,9 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
             UNSAFE.compareAndSwapInt(this, allocationSpinLockOffset,
                                      0, 1)) {
             try {
+                // 扩容机制：
+                // 小于64之前： newCap = oldCap + oleCap + 2
+                // newCap = oldCap + 2* oldCap
                 int newCap = oldCap + ((oldCap < 64) ?
                                        (oldCap + 2) : // grow faster if small
                                        (oldCap >> 1));
@@ -312,6 +315,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         lock.lock();
         if (newArray != null && queue == array) {
             queue = newArray;
+            // 复制
             System.arraycopy(array, 0, newArray, 0, oldCap);
         }
     }
@@ -353,16 +357,20 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * @param x the item to insert
      * @param array the heap array
      */
+    // 堆调整处理,不断交换 插入到合适的位置
     private static <T> void siftUpComparable(int k, T x, Object[] array) {
         Comparable<? super T> key = (Comparable<? super T>) x;
         while (k > 0) {
+            // (k-1) /2 找到父节点
             int parent = (k - 1) >>> 1;
             Object e = array[parent];
+            // 找到了目标位置
             if (key.compareTo((T) e) >= 0)
                 break;
             array[k] = e;
             k = parent;
         }
+        // 进行交换
         array[k] = key;
     }
 
@@ -410,15 +418,22 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         }
     }
 
+
+    // 将末尾值移动到arr[0]
+    // 然后不断调整堆，判断左右孩子是否满足
     private static <T> void siftDownUsingComparator(int k, T x, Object[] array,
                                                     int n,
                                                     Comparator<? super T> cmp) {
         if (n > 0) {
+            // 最后非叶子节点
             int half = n >>> 1;
             while (k < half) {
+                // k节点的左孩子
                 int child = (k << 1) + 1;
                 Object c = array[child];
+                // k节点的右边孩子
                 int right = child + 1;
+
                 if (right < n && cmp.compare((T) c, (T) array[right]) > 0)
                     c = array[child = right];
                 if (cmp.compare(x, (T) c) <= 0)
@@ -482,6 +497,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         int n, cap;
         Object[] array;
         while ((n = size) >= (cap = (array = queue).length))
+            // 尝试扩容
             tryGrow(array, cap);
         try {
             Comparator<? super E> cmp = comparator;
@@ -490,6 +506,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
             else
                 siftUpUsingComparator(n, e, array, cmp);
             size = n + 1;
+            // 补充唤醒
             notEmpty.signal();
         } finally {
             lock.unlock();
